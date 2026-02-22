@@ -2,18 +2,21 @@ export interface RouteConfig {
   origin: string;
   destination: string;
   enabled: boolean;
-  priceThreshold: number; // TWD，家庭含稅總價（2大1小）
+  priceThreshold: number;          // TWD，含稅總價
   dateRange: { start: string; end: string };
   departureTimeRange?: { earliest: string; latest: string };
   arrivalTimeRange?: { earliest: string; latest: string };
+  directFlightOnly?: boolean;      // true = 只搜尋直飛航班
+  passengers?: { adults: number; children: number }; // 覆蓋全域預設（未設定時使用 AppConfig.passengers）
 }
 
 export interface AppConfig {
-  passengers: { adults: number; children: number };
+  passengers: { adults: number; children: number }; // 全域預設：2大1小
   routes: RouteConfig[];
 }
 
 export const config: AppConfig = {
+  // 全域預設乘客：2大1小（可被各航線的 passengers 覆蓋）
   passengers: { adults: 2, children: 1 },
   routes: [
     {
@@ -24,6 +27,7 @@ export const config: AppConfig = {
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
       departureTimeRange: { earliest: '06:00', latest: '22:00' },
       arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
+      directFlightOnly: true,
     },
     {
       origin: 'TPE',
@@ -32,6 +36,7 @@ export const config: AppConfig = {
       priceThreshold: 22000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
       departureTimeRange: { earliest: '06:00', latest: '22:00' },
+      directFlightOnly: true,
     },
     {
       origin: 'TPE',
@@ -39,6 +44,7 @@ export const config: AppConfig = {
       enabled: true,
       priceThreshold: 18000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      directFlightOnly: true,
     },
     {
       origin: 'TPE',
@@ -46,6 +52,7 @@ export const config: AppConfig = {
       enabled: true,
       priceThreshold: 16000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      directFlightOnly: true,
     },
     {
       origin: 'TPE',
@@ -54,6 +61,7 @@ export const config: AppConfig = {
       priceThreshold: 24000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
       departureTimeRange: { earliest: '06:00', latest: '20:00' },
+      directFlightOnly: true,
     },
   ],
 };

@@ -119,15 +119,19 @@ export class AmadeusProvider implements FlightProvider {
     }
 
     try {
-      const response = await this.client.shopping.flightOffersSearch.get({
+      const effectivePassengers = route.passengers ?? passengers;
+      const params: Record<string, unknown> = {
         originLocationCode: route.origin,
         destinationLocationCode: route.destination,
         departureDate: route.dateRange.start,
-        adults: passengers.adults,
-        children: passengers.children,
+        adults: effectivePassengers.adults,
+        children: effectivePassengers.children,
         currencyCode: 'TWD',
         max: 10,
-      });
+      };
+      if (route.directFlightOnly) params['nonStop'] = 'true';
+
+      const response = await this.client.shopping.flightOffersSearch.get(params);
 
       const offers: FlightOffer[] = [];
       for (const raw of response.data) {

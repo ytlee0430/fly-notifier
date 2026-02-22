@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { filterByTimeRange, filterByPrice, scanRoute, scanAllRoutes } from '../../src/scanner/scanner.js';
+import { filterByTimeRange, filterByPrice, filterByDirectFlight, scanRoute, scanAllRoutes } from '../../src/scanner/scanner.js';
 import type { FlightOffer } from '../../src/providers/types.js';
 import type { RouteConfig } from '../../src/config.js';
 
@@ -85,6 +85,64 @@ describe('Story 2.3: Scanner - filterByPrice', () => {
       makeOffer({ totalPriceTWD: 30000 }),
     ];
     expect(filterByPrice(offers, 25000)).toHaveLength(2);
+  });
+});
+
+describe('filterByDirectFlight', () => {
+  it('stops=0 的航班通過', () => {
+    const offers = [makeOffer({ stops: 0 }), makeOffer({ stops: 0 })];
+    expect(filterByDirectFlight(offers)).toHaveLength(2);
+  });
+
+  it('stops>0 的航班排除', () => {
+    const offers = [makeOffer({ stops: 1 }), makeOffer({ stops: 2 })];
+    expect(filterByDirectFlight(offers)).toHaveLength(0);
+  });
+
+  it('混合直飛與轉機時只留直飛', () => {
+    const offers = [makeOffer({ stops: 0 }), makeOffer({ stops: 1 }), makeOffer({ stops: 0 })];
+    expect(filterByDirectFlight(offers)).toHaveLength(2);
+  });
+});
+
+describe('directFlightOnly 在 scanRoute 整合', () => {
+  it('directFlightOnly:true 時排除轉機航班', async () => {
+    const mockProvider = {
+      search: vi.fn().mockResolvedValue([
+        makeOffer({ stops: 0, totalPriceTWD: 20000 }),
+        makeOffer({ stops: 1, totalPriceTWD: 15000 }),
+      ]),
+    };
+    const route = { ...baseRoute, directFlightOnly: true };
+    const result = await scanRoute(route, [mockProvider], { adults: 2, children: 1 });
+    expect(result.cheapOffers).toHaveLength(1);
+    expect(result.cheapOffers[0]!.stops).toBe(0);
+    expect(result.lowestPrice).toBe(20000); // 轉機15000被排除，直飛20000才是最低
+  });
+
+  it('directFlightOnly:false 時轉機航班保留', async () => {
+    const mockProvider = {
+      search: vi.fn().mockResolvedValue([
+        makeOffer({ stops: 0, totalPriceTWD: 20000 }),
+        makeOffer({ stops: 1, totalPriceTWD: 15000 }),
+      ]),
+    };
+    const result = await scanRoute(baseRoute, [mockProvider], { adults: 2, children: 1 });
+    expect(result.cheapOffers).toHaveLength(2);
+    expect(result.lowestPrice).toBe(15000);
+  });
+
+  it('per-route passengers 覆蓋全域設定', async () => {
+    const mockProvider = { search: vi.fn().mockResolvedValue([]) };
+    const route = { ...baseRoute, passengers: { adults: 1, children: 0 } };
+    await scanRoute(route, [mockProvider], { adults: 2, children: 1 });
+    expect(mockProvider.search).toHaveBeenCalledWith(route, { adults: 1, children: 0 });
+  });
+
+  it('未設 per-route passengers 時使用全域', async () => {
+    const mockProvider = { search: vi.fn().mockResolvedValue([]) };
+    await scanRoute(baseRoute, [mockProvider], { adults: 3, children: 2 });
+    expect(mockProvider.search).toHaveBeenCalledWith(baseRoute, { adults: 3, children: 2 });
   });
 });
 

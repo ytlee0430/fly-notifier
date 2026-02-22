@@ -134,3 +134,73 @@ describe('Story 2.2: Amadeus Provider - transformOffer', () => {
     expect(result.totalPriceTWD).toBeTypeOf('number');
   });
 });
+
+describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
+  it('directFlightOnly:true 時 API params 包含 nonStop:true', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+
+    // Access the internal client mock
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      directFlightOnly: true,
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ nonStop: 'true' }));
+
+    vi.unstubAllEnvs();
+  });
+
+  it('directFlightOnly 未設定時 API params 不含 nonStop', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    const calledWith = getMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(calledWith['nonStop']).toBeUndefined();
+
+    vi.unstubAllEnvs();
+  });
+
+  it('per-route passengers 優先於全域', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      passengers: { adults: 1, children: 0 },
+    };
+    await provider.search(route, { adults: 2, children: 1 }); // global=2+1
+
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ adults: 1, children: 0 }));
+
+    vi.unstubAllEnvs();
+  });
+});

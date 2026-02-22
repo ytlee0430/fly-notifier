@@ -30,6 +30,10 @@ export function filterByPrice(offers: FlightOffer[], priceThreshold: number): Fl
   return offers.filter((o) => o.totalPriceTWD <= priceThreshold);
 }
 
+export function filterByDirectFlight(offers: FlightOffer[]): FlightOffer[] {
+  return offers.filter((o) => o.stops === 0);
+}
+
 export async function scanRoute(
   route: RouteConfig,
   providers: FlightProvider[],
@@ -38,9 +42,11 @@ export async function scanRoute(
   const routeKey = `${route.origin}-${route.destination}`;
   const allOffers: FlightOffer[] = [];
 
+  const effectivePassengers = route.passengers ?? passengers;
+
   for (const provider of providers) {
     try {
-      const offers = await provider.search(route, passengers);
+      const offers = await provider.search(route, effectivePassengers);
       allOffers.push(...offers);
     } catch (error) {
       logger.error({
@@ -53,11 +59,12 @@ export async function scanRoute(
   }
 
   const timeFiltered = filterByTimeRange(allOffers, route);
-  const cheapOffers = filterByPrice(timeFiltered, route.priceThreshold);
+  const directFiltered = route.directFlightOnly ? filterByDirectFlight(timeFiltered) : timeFiltered;
+  const cheapOffers = filterByPrice(directFiltered, route.priceThreshold);
 
   const lowestPrice =
-    timeFiltered.length > 0
-      ? Math.min(...timeFiltered.map((o) => o.totalPriceTWD))
+    directFiltered.length > 0
+      ? Math.min(...directFiltered.map((o) => o.totalPriceTWD))
       : null;
 
   logger.info({
@@ -66,11 +73,13 @@ export async function scanRoute(
     route: routeKey,
     totalFound: allOffers.length,
     afterTimeFilter: timeFiltered.length,
+    directOnly: route.directFlightOnly ?? false,
+    afterDirectFilter: directFiltered.length,
     belowThreshold: cheapOffers.length,
     lowestPrice,
   });
 
-  return { route: routeKey, cheapOffers, allOffers: timeFiltered, lowestPrice };
+  return { route: routeKey, cheapOffers, allOffers: directFiltered, lowestPrice };
 }
 
 export async function scanAllRoutes(
