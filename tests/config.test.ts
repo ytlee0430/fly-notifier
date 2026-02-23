@@ -94,7 +94,7 @@ describe('Story 1.2: 航線設定模組', () => {
     });
   });
 
-  describe('directFlightOnly & per-route passengers', () => {
+  describe('directFlightOnly, budgetAirlineOnly & per-route passengers', () => {
     it('所有啟用的航線都設定 directFlightOnly:true', () => {
       const enabled = config.routes.filter((r) => r.enabled);
       for (const route of enabled) {
@@ -102,17 +102,41 @@ describe('Story 1.2: 航線設定模組', () => {
       }
     });
 
+    it('所有啟用的航線都設定 budgetAirlineOnly:true', () => {
+      const enabled = config.routes.filter((r) => r.enabled);
+      for (const route of enabled) {
+        expect(route.budgetAirlineOnly).toBe(true);
+      }
+    });
+
+    it('所有啟用的航線都設定 departureTimeRange', () => {
+      const enabled = config.routes.filter((r) => r.enabled);
+      for (const route of enabled) {
+        expect(route.departureTimeRange).toBeDefined();
+      }
+    });
+
+    it('所有啟用的航線都設定 arrivalTimeRange', () => {
+      const enabled = config.routes.filter((r) => r.enabled);
+      for (const route of enabled) {
+        expect(route.arrivalTimeRange).toBeDefined();
+      }
+    });
+
     it('全域 passengers 預設為 2大1小', () => {
       expect(config.passengers).toEqual({ adults: 2, children: 1 });
     });
 
-    it('RouteConfig 的 passengers 和 directFlightOnly 為選填欄位', () => {
+    it('RouteConfig 的選填欄位未設定時為 undefined', () => {
       const minimalRoute: RouteConfig = {
         origin: 'TPE', destination: 'NRT', enabled: true,
         priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
       };
       expect(minimalRoute.directFlightOnly).toBeUndefined();
+      expect(minimalRoute.budgetAirlineOnly).toBeUndefined();
       expect(minimalRoute.passengers).toBeUndefined();
+      expect(minimalRoute.departureTimeRange).toBeUndefined();
+      expect(minimalRoute.arrivalTimeRange).toBeUndefined();
     });
   });
 });

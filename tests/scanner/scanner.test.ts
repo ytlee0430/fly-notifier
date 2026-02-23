@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { filterByTimeRange, filterByPrice, filterByDirectFlight, scanRoute, scanAllRoutes } from '../../src/scanner/scanner.js';
+import {
+  filterByTimeRange, filterByPrice, filterByDirectFlight,
+  filterByBudgetAirline, BUDGET_AIRLINES, scanRoute, scanAllRoutes,
+} from '../../src/scanner/scanner.js';
 import type { FlightOffer } from '../../src/providers/types.js';
 import type { RouteConfig } from '../../src/config.js';
 
@@ -102,6 +105,70 @@ describe('filterByDirectFlight', () => {
   it('混合直飛與轉機時只留直飛', () => {
     const offers = [makeOffer({ stops: 0 }), makeOffer({ stops: 1 }), makeOffer({ stops: 0 })];
     expect(filterByDirectFlight(offers)).toHaveLength(2);
+  });
+});
+
+describe('filterByBudgetAirline', () => {
+  it('廉價航空（IT=虎航）通過', () => {
+    expect(filterByBudgetAirline([makeOffer({ airline: 'IT' })])).toHaveLength(1);
+  });
+
+  it('全服務航空（CI=華航）排除', () => {
+    expect(filterByBudgetAirline([makeOffer({ airline: 'CI' })])).toHaveLength(0);
+  });
+
+  it('混合時只留廉價航空', () => {
+    const offers = [
+      makeOffer({ airline: 'IT' }), // 虎航 LCC
+      makeOffer({ airline: 'CI' }), // 華航 FSC
+      makeOffer({ airline: 'MM' }), // 樂桃 LCC
+      makeOffer({ airline: 'BR' }), // 長榮 FSC
+    ];
+    const result = filterByBudgetAirline(offers);
+    expect(result).toHaveLength(2);
+    expect(result.map((o) => o.airline)).toEqual(['IT', 'MM']);
+  });
+
+  it('BUDGET_AIRLINES 包含虎航(IT)、樂桃(MM)、酷航(TR)、捷星日本(GK)', () => {
+    expect(BUDGET_AIRLINES.has('IT')).toBe(true);
+    expect(BUDGET_AIRLINES.has('MM')).toBe(true);
+    expect(BUDGET_AIRLINES.has('TR')).toBe(true);
+    expect(BUDGET_AIRLINES.has('GK')).toBe(true);
+  });
+
+  it('BUDGET_AIRLINES 不包含全服務航空(CI、BR、JL、NH)', () => {
+    expect(BUDGET_AIRLINES.has('CI')).toBe(false);
+    expect(BUDGET_AIRLINES.has('BR')).toBe(false);
+    expect(BUDGET_AIRLINES.has('JL')).toBe(false);
+    expect(BUDGET_AIRLINES.has('NH')).toBe(false);
+  });
+});
+
+describe('budgetAirlineOnly 在 scanRoute 整合', () => {
+  it('budgetAirlineOnly:true 時排除全服務航空', async () => {
+    const mockProvider = {
+      search: vi.fn().mockResolvedValue([
+        makeOffer({ airline: 'IT', totalPriceTWD: 20000 }), // LCC
+        makeOffer({ airline: 'CI', totalPriceTWD: 18000 }), // FSC，雖便宜但被排除
+      ]),
+    };
+    const route = { ...baseRoute, budgetAirlineOnly: true };
+    const result = await scanRoute(route, [mockProvider], { adults: 2, children: 1 });
+    expect(result.cheapOffers).toHaveLength(1);
+    expect(result.cheapOffers[0]!.airline).toBe('IT');
+    expect(result.lowestPrice).toBe(20000); // CI 18000 被過濾，IT 20000 才是最低
+  });
+
+  it('budgetAirlineOnly:false 時全服務航空保留', async () => {
+    const mockProvider = {
+      search: vi.fn().mockResolvedValue([
+        makeOffer({ airline: 'IT', totalPriceTWD: 20000 }),
+        makeOffer({ airline: 'CI', totalPriceTWD: 18000 }),
+      ]),
+    };
+    const result = await scanRoute(baseRoute, [mockProvider], { adults: 2, children: 1 });
+    expect(result.cheapOffers).toHaveLength(2);
+    expect(result.lowestPrice).toBe(18000);
   });
 });
 

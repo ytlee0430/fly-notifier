@@ -7,6 +7,7 @@ export interface RouteConfig {
   departureTimeRange?: { earliest: string; latest: string };
   arrivalTimeRange?: { earliest: string; latest: string };
   directFlightOnly?: boolean;      // true = 只搜尋直飛航班
+  budgetAirlineOnly?: boolean;     // true = 只搜尋廉價航空（LCC）
   passengers?: { adults: number; children: number }; // 覆蓋全域預設（未設定時使用 AppConfig.passengers）
 }
 
@@ -28,6 +29,7 @@ export const config: AppConfig = {
       departureTimeRange: { earliest: '06:00', latest: '22:00' },
       arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
+      budgetAirlineOnly: true,
     },
     {
       origin: 'TPE',
@@ -36,7 +38,9 @@ export const config: AppConfig = {
       priceThreshold: 22000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
       departureTimeRange: { earliest: '06:00', latest: '22:00' },
+      arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
+      budgetAirlineOnly: true,
     },
     {
       origin: 'TPE',
@@ -44,7 +48,10 @@ export const config: AppConfig = {
       enabled: true,
       priceThreshold: 18000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      departureTimeRange: { earliest: '06:00', latest: '22:00' },
+      arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
+      budgetAirlineOnly: true,
     },
     {
       origin: 'TPE',
@@ -52,7 +59,10 @@ export const config: AppConfig = {
       enabled: true,
       priceThreshold: 16000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      departureTimeRange: { earliest: '06:00', latest: '22:00' },
+      arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
+      budgetAirlineOnly: true,
     },
     {
       origin: 'TPE',
@@ -61,7 +71,9 @@ export const config: AppConfig = {
       priceThreshold: 24000,
       dateRange: { start: '2026-04-01', end: '2026-06-30' },
       departureTimeRange: { earliest: '06:00', latest: '20:00' },
+      arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
+      budgetAirlineOnly: true,
     },
   ],
 };

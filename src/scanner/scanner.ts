@@ -2,6 +2,24 @@ import type { RouteConfig } from '../config.js';
 import type { FlightOffer, FlightProvider, Passengers } from '../providers/types.js';
 import { logger } from '../utils/logger.js';
 
+// 亞太航線主要廉價航空（LCC）IATA 代碼
+export const BUDGET_AIRLINES = new Set([
+  'IT', // Tigerair Taiwan 台灣虎航
+  'TR', // Scoot 酷航
+  'MM', // Peach Aviation 樂桃航空
+  'GK', // Jetstar Japan 捷星日本
+  '3K', // Jetstar Asia 捷星亞洲
+  'JW', // Vanilla Air（已併入 Peach）
+  '9C', // Spring Airlines 春秋航空
+  'HO', // Juneyao Airlines 吉祥航空（部分為 LCC）
+  'ZV', // V Air 威航（已停航，保留供歷史資料）
+  'AK', // AirAsia
+  'FD', // AirAsia Thailand
+  'QZ', // AirAsia Indonesia
+  'Z2', // AirAsia Philippines
+  'D7', // AirAsia X
+]);
+
 export interface ScanResult {
   route: string; // "TPE-NRT"
   cheapOffers: FlightOffer[]; // below priceThreshold
@@ -34,6 +52,10 @@ export function filterByDirectFlight(offers: FlightOffer[]): FlightOffer[] {
   return offers.filter((o) => o.stops === 0);
 }
 
+export function filterByBudgetAirline(offers: FlightOffer[]): FlightOffer[] {
+  return offers.filter((o) => BUDGET_AIRLINES.has(o.airline));
+}
+
 export async function scanRoute(
   route: RouteConfig,
   providers: FlightProvider[],
@@ -60,11 +82,12 @@ export async function scanRoute(
 
   const timeFiltered = filterByTimeRange(allOffers, route);
   const directFiltered = route.directFlightOnly ? filterByDirectFlight(timeFiltered) : timeFiltered;
-  const cheapOffers = filterByPrice(directFiltered, route.priceThreshold);
+  const budgetFiltered = route.budgetAirlineOnly ? filterByBudgetAirline(directFiltered) : directFiltered;
+  const cheapOffers = filterByPrice(budgetFiltered, route.priceThreshold);
 
   const lowestPrice =
-    directFiltered.length > 0
-      ? Math.min(...directFiltered.map((o) => o.totalPriceTWD))
+    budgetFiltered.length > 0
+      ? Math.min(...budgetFiltered.map((o) => o.totalPriceTWD))
       : null;
 
   logger.info({
@@ -75,11 +98,13 @@ export async function scanRoute(
     afterTimeFilter: timeFiltered.length,
     directOnly: route.directFlightOnly ?? false,
     afterDirectFilter: directFiltered.length,
+    budgetOnly: route.budgetAirlineOnly ?? false,
+    afterBudgetFilter: budgetFiltered.length,
     belowThreshold: cheapOffers.length,
     lowestPrice,
   });
 
-  return { route: routeKey, cheapOffers, allOffers: directFiltered, lowestPrice };
+  return { route: routeKey, cheapOffers, allOffers: budgetFiltered, lowestPrice };
 }
 
 export async function scanAllRoutes(
