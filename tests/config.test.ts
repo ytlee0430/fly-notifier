@@ -94,7 +94,7 @@ describe('Story 1.2: 航線設定模組', () => {
     });
   });
 
-  describe('directFlightOnly, budgetAirlineOnly & per-route passengers', () => {
+  describe('directFlightOnly, excludeAirlines & per-route passengers', () => {
     it('所有啟用的航線都設定 directFlightOnly:true', () => {
       const enabled = config.routes.filter((r) => r.enabled);
       for (const route of enabled) {
@@ -102,10 +102,11 @@ describe('Story 1.2: 航線設定模組', () => {
       }
     });
 
-    it('所有啟用的航線都設定 budgetAirlineOnly:true', () => {
+    it('所有啟用的航線都設定 excludeAirlines 且包含 CI', () => {
       const enabled = config.routes.filter((r) => r.enabled);
       for (const route of enabled) {
-        expect(route.budgetAirlineOnly).toBe(true);
+        expect(route.excludeAirlines).toBeDefined();
+        expect(route.excludeAirlines).toContain('CI');
       }
     });
 
@@ -133,7 +134,7 @@ describe('Story 1.2: 航線設定模組', () => {
         priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
       };
       expect(minimalRoute.directFlightOnly).toBeUndefined();
-      expect(minimalRoute.budgetAirlineOnly).toBeUndefined();
+      expect(minimalRoute.excludeAirlines).toBeUndefined();
       expect(minimalRoute.passengers).toBeUndefined();
       expect(minimalRoute.departureTimeRange).toBeUndefined();
       expect(minimalRoute.arrivalTimeRange).toBeUndefined();
