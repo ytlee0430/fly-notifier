@@ -8,6 +8,7 @@ export interface ScanResult {
   cheapOffers: FlightOffer[]; // below priceThreshold
   allOffers: FlightOffer[]; // all offers (for morning report)
   lowestPrice: number | null; // null if no offers
+  isRoundTrip: boolean; // whether this scan was for round-trip flights
 }
 
 function isTimeInRange(time: string, range: { earliest: string; latest: string }): boolean {
@@ -40,6 +41,32 @@ export function filterByExcludedAirlines(offers: FlightOffer[], excludeList: str
   return offers.filter((o) => !excluded.has(o.airline));
 }
 
+export function filterByReturnWindow(offers: FlightOffer[], route: RouteConfig): FlightOffer[] {
+  if (!route.returnWindowDays || !route.returnDateRange) {
+    return offers;
+  }
+
+  const minDays = route.returnWindowDays.min ?? 3;
+  const maxDays = route.returnWindowDays.max ?? 5;
+
+  return offers.filter((offer) => {
+    if (!offer.returnDate) {
+      // Not a round-trip offer, keep it
+      return true;
+    }
+
+    const departureDate = new Date(offer.departureDate);
+    const returnDate = new Date(offer.returnDate);
+
+    // Calculate days difference
+    const timeDiff = returnDate.getTime() - departureDate.getTime();
+    const daysDiff = timeDiff / (1000 * 3600 * 24);
+
+    // Return true if within the configured window
+    return daysDiff >= minDays && daysDiff <= maxDays;
+  });
+}
+
 export async function scanRoute(
   route: RouteConfig,
   providers: FlightProvider[],
@@ -49,6 +76,7 @@ export async function scanRoute(
   const allOffers: FlightOffer[] = [];
 
   const effectivePassengers = route.passengers ?? passengers;
+  const isRoundTrip = !!route.returnDateRange;
 
   for (const provider of providers) {
     try {
@@ -69,7 +97,8 @@ export async function scanRoute(
   const airlineFiltered = route.excludeAirlines?.length
     ? filterByExcludedAirlines(directFiltered, route.excludeAirlines)
     : directFiltered;
-  const cheapOffers = filterByPrice(airlineFiltered, route.priceThreshold);
+  const returnWindowFiltered = filterByReturnWindow(airlineFiltered, route);
+  const cheapOffers = filterByPrice(returnWindowFiltered, route.priceThreshold);
 
   const lowestPrice =
     airlineFiltered.length > 0
@@ -86,11 +115,14 @@ export async function scanRoute(
     afterDirectFilter: directFiltered.length,
     excludeAirlines: route.excludeAirlines ?? [],
     afterAirlineFilter: airlineFiltered.length,
+    returnWindowDays: route.returnWindowDays,
+    afterReturnWindowFilter: returnWindowFiltered.length,
     belowThreshold: cheapOffers.length,
     lowestPrice,
+    isRoundTrip,
   });
 
-  return { route: routeKey, cheapOffers, allOffers: airlineFiltered, lowestPrice };
+  return { route: routeKey, cheapOffers, allOffers: airlineFiltered, lowestPrice, isRoundTrip };
 }
 
 export async function scanAllRoutes(
@@ -114,6 +146,14 @@ export async function scanAllRoutes(
       });
     }
   }
+
+  logger.info({
+    module: 'scanner',
+    action: 'scanAllRoutes',
+    totalRoutes: enabledRoutes.length,
+    roundTripRoutes: enabledRoutes.filter(r => r.returnDateRange).length,
+    oneWayRoutes: enabledRoutes.filter(r => !r.returnDateRange).length,
+  });
 
   return results;
 }
