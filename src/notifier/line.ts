@@ -64,6 +64,29 @@ export async function sendLowPriceAlert(offers: FlightOffer[]): Promise<NotifyRe
   }
 }
 
+function formatMorningReportItem(item: { route: string; lowestPrice: number | null; bestOffer: FlightOffer | null }): string {
+  if (!item.bestOffer || item.lowestPrice === null) {
+    return `${item.route}: 無資料`;
+  }
+
+  const offer = item.bestOffer;
+  const stopsText = offer.stops === 0 ? '直飛' : `轉機 ${offer.stops} 次`;
+
+  // 來回票格式
+  if (offer.returnDate) {
+    const retStopsText = offer.returnStops === 0 ? '直飛' : `轉機 ${offer.returnStops} 次`;
+    return [
+      `✈️ ${offer.origin}→${offer.destination} 來回`,
+      `  去 ${offer.departureDate.slice(5)} ${offer.departureTime}→${offer.arrivalTime} ${offer.flightNumber} (${stopsText})`,
+      `  回 ${offer.returnDate.slice(5)} ${offer.returnDepartureTime}→${offer.returnArrivalTime} ${offer.returnFlightNumber} (${retStopsText})`,
+      `  💰 NT$${item.lowestPrice.toLocaleString()}`,
+    ].join('\n');
+  }
+
+  // 單程格式
+  return `${offer.origin}→${offer.destination}: NT$${item.lowestPrice.toLocaleString()} | ${offer.airline} ${offer.flightNumber} | ${offer.departureTime} (${stopsText})`;
+}
+
 export async function sendMorningReport(
   summary: Array<{ route: string; lowestPrice: number | null; bestOffer: FlightOffer | null }>,
 ): Promise<NotifyResult> {
@@ -77,20 +100,13 @@ export async function sendMorningReport(
 
   const client = new line.messagingApi.MessagingApiClient({ channelAccessToken });
 
-  const lines: string[] = ['📊 每日航班早報\n' + '─'.repeat(30)];
+  const separator = '─'.repeat(30);
+  const reportLines: string[] = [`📊 每日航班早報\n${separator}`];
   for (const item of summary) {
-    if (item.bestOffer && item.lowestPrice !== null) {
-      const offer = item.bestOffer;
-      const stopsText = offer.stops === 0 ? '直飛' : `轉機 ${offer.stops} 次`;
-      lines.push(
-        `${offer.origin}→${offer.destination}: NT$${item.lowestPrice.toLocaleString()} | ${offer.airline} ${offer.flightNumber} | ${offer.departureTime} (${stopsText})`,
-      );
-    } else {
-      lines.push(`${item.route}: 無資料`);
-    }
+    reportLines.push(formatMorningReportItem(item));
   }
 
-  const message = lines.join('\n');
+  const message = reportLines.join(`\n${separator}\n`);
 
   try {
     await client.pushMessage({
@@ -110,4 +126,4 @@ export async function sendMorningReport(
   }
 }
 
-export { formatOffer, formatMessage };
+export { formatOffer, formatMessage, formatMorningReportItem };

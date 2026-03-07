@@ -118,6 +118,41 @@ describe('Story 2.2: Amadeus Provider - transformOffer', () => {
     expect(result?.bookingUrl).toContain('NRT');
   });
 
+  it('來回票正確解析回程 itinerary', async () => {
+    const { transformOffer } = await import('../../src/providers/amadeus.js');
+    const roundTripOffer = {
+      ...mockRawOffer,
+      itineraries: [
+        mockRawOffer.itineraries[0]!,
+        {
+          segments: [
+            {
+              departure: { iataCode: 'NRT', at: '2026-04-05T14:00:00' },
+              arrival: { iataCode: 'TPE', at: '2026-04-05T17:30:00' },
+              carrierCode: 'IT',
+              number: '202',
+              numberOfStops: 0,
+            },
+          ],
+        },
+      ],
+    };
+    const result = transformOffer(roundTripOffer, 'TPE', 'NRT');
+    expect(result?.returnDate).toBe('2026-04-05');
+    expect(result?.returnDepartureTime).toBe('14:00');
+    expect(result?.returnArrivalTime).toBe('17:30');
+    expect(result?.returnAirline).toBe('IT');
+    expect(result?.returnFlightNumber).toBe('IT202');
+    expect(result?.returnStops).toBe(0);
+  });
+
+  it('單程票無回程欄位', async () => {
+    const { transformOffer } = await import('../../src/providers/amadeus.js');
+    const result = transformOffer(mockRawOffer, 'TPE', 'NRT');
+    expect(result?.returnDate).toBeUndefined();
+    expect(result?.returnDepartureTime).toBeUndefined();
+  });
+
   it('空 itineraries 回傳 null', async () => {
     const { transformOffer } = await import('../../src/providers/amadeus.js');
     const emptyOffer = { ...mockRawOffer, itineraries: [] };
@@ -178,6 +213,50 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
 
     const calledWith = getMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(calledWith['nonStop']).toBeUndefined();
+
+    vi.unstubAllEnvs();
+  });
+
+  it('有 returnDateRange 時 API params 包含 returnDate', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      returnDateRange: { start: '2026-04-05', end: '2026-04-10' },
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ returnDate: '2026-04-05' }));
+
+    vi.unstubAllEnvs();
+  });
+
+  it('無 returnDateRange 時 API params 不含 returnDate', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    const calledWith = getMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(calledWith['returnDate']).toBeUndefined();
 
     vi.unstubAllEnvs();
   });

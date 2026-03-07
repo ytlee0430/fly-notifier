@@ -13,6 +13,13 @@ export interface FlightOffer {
   totalPriceTWD: number; // 含稅總價（TWD）
   currency: string; // 原始幣別
   bookingUrl: string; // 訂票連結
+  // 回程資訊（來回票時才有）
+  returnDate?: string; // ISO date "2026-04-15"
+  returnDepartureTime?: string; // "10:00"
+  returnArrivalTime?: string; // "14:30"
+  returnAirline?: string;
+  returnFlightNumber?: string;
+  returnStops?: number;
 }
 
 export interface Passengers {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FlightOffer } from '../../src/providers/types.js';
-import { formatOffer, sendLowPriceAlert, sendMorningReport } from '../../src/notifier/line.js';
+import { formatOffer, formatMorningReportItem, sendLowPriceAlert, sendMorningReport } from '../../src/notifier/line.js';
 
 let mockPushMessage: ReturnType<typeof vi.fn>;
 
@@ -152,5 +152,59 @@ describe('Story 4.1: sendMorningReport', () => {
     const result = await sendMorningReport([{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: makeOffer() }]);
     expect(result.success).toBe(false);
     expect(result.sent).toBe(0);
+  });
+
+  it('來回票摘要包含去程和回程資訊', async () => {
+    const roundTripOffer = makeOffer({
+      departureDate: '2026-07-25',
+      departureTime: '09:00',
+      arrivalTime: '13:30',
+      airline: 'JL',
+      flightNumber: 'JL802',
+      returnDate: '2026-07-28',
+      returnDepartureTime: '14:00',
+      returnArrivalTime: '17:30',
+      returnAirline: 'JL',
+      returnFlightNumber: 'JL803',
+      returnStops: 0,
+    });
+    const summary = [{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: roundTripOffer }];
+    const result = await sendMorningReport(summary);
+    expect(result.success).toBe(true);
+    const callArg = mockPushMessage.mock.calls[0]![0] as { messages: Array<{ text: string }> };
+    const text = callArg.messages[0]!.text;
+    expect(text).toContain('來回');
+    expect(text).toContain('去 07-25 09:00→13:30');
+    expect(text).toContain('回 07-28 14:00→17:30');
+    expect(text).toContain('17,491');
+  });
+});
+
+describe('formatMorningReportItem', () => {
+  it('來回票顯示去回程資訊', () => {
+    const offer = makeOffer({
+      departureDate: '2026-07-25',
+      returnDate: '2026-07-28',
+      returnDepartureTime: '14:00',
+      returnArrivalTime: '17:30',
+      returnAirline: 'JL',
+      returnFlightNumber: 'JL803',
+      returnStops: 0,
+    });
+    const result = formatMorningReportItem({ route: 'TPE-NRT', lowestPrice: 18900, bestOffer: offer });
+    expect(result).toContain('來回');
+    expect(result).toContain('去');
+    expect(result).toContain('回');
+  });
+
+  it('單程票顯示單行格式', () => {
+    const result = formatMorningReportItem({ route: 'TPE-NRT', lowestPrice: 18900, bestOffer: makeOffer() });
+    expect(result).not.toContain('來回');
+    expect(result).toContain('18,900');
+  });
+
+  it('無資料顯示無資料', () => {
+    const result = formatMorningReportItem({ route: 'TPE-FUK', lowestPrice: null, bestOffer: null });
+    expect(result).toContain('無資料');
   });
 });

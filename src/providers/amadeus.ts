@@ -70,7 +70,7 @@ export function transformOffer(offer: AmadeusRawOffer, origin: string, destinati
   const flightNumber = `${firstSegment.carrierCode}${firstSegment.number}`;
   const totalPriceTWD = Math.round(parseFloat(offer.price.grandTotal));
 
-  return {
+  const result: FlightOffer = {
     source: 'amadeus',
     origin,
     destination,
@@ -84,6 +84,21 @@ export function transformOffer(offer: AmadeusRawOffer, origin: string, destinati
     currency: offer.price.currency,
     bookingUrl: buildBookingUrl(origin, destination, departureDate),
   };
+
+  // 解析回程 itinerary（來回票時 itineraries[1] 為回程）
+  const returnItinerary = offer.itineraries[1];
+  if (returnItinerary && returnItinerary.segments.length > 0) {
+    const retFirstSeg = returnItinerary.segments[0]!;
+    const retLastSeg = returnItinerary.segments[returnItinerary.segments.length - 1]!;
+    result.returnDate = parseDate(retFirstSeg.departure.at);
+    result.returnDepartureTime = parseTime(retFirstSeg.departure.at);
+    result.returnArrivalTime = parseTime(retLastSeg.arrival.at);
+    result.returnAirline = retFirstSeg.carrierCode;
+    result.returnFlightNumber = `${retFirstSeg.carrierCode}${retFirstSeg.number}`;
+    result.returnStops = returnItinerary.segments.length - 1;
+  }
+
+  return result;
 }
 
 export class AmadeusProvider implements FlightProvider {
@@ -129,6 +144,9 @@ export class AmadeusProvider implements FlightProvider {
         currencyCode: 'TWD',
         max: 10,
       };
+      if (route.returnDateRange) {
+        params['returnDate'] = route.returnDateRange.start;
+      }
       if (route.directFlightOnly) params['nonStop'] = 'true';
 
       const response = await this.client.shopping.flightOffersSearch.get(params);
