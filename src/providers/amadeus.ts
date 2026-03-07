@@ -55,6 +55,35 @@ function buildBookingUrl(origin: string, destination: string, departureDate: str
   return `https://www.google.com/travel/flights?q=Flights+${origin}+to+${destination}+on+${departureDate}`;
 }
 
+export function generateDateRange(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const current = new Date(start + 'T12:00:00Z');
+  const endDate = new Date(end + 'T12:00:00Z');
+  while (current <= endDate) {
+    dates.push(current.toISOString().split('T')[0]!);
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const date = new Date(dateStr + 'T12:00:00Z');
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().split('T')[0]!;
+}
+
+function computeReturnDate(depDate: string, route: RouteConfig): string | null {
+  if (!route.returnDateRange) return null;
+  if (route.returnWindowDays) {
+    const ret = addDays(depDate, route.returnWindowDays.min);
+    return ret <= route.returnDateRange.end ? ret : null;
+  }
+  // 無 returnWindowDays 時，取出發日 +3 天或 returnDateRange.start（取較晚者）
+  const depPlus3 = addDays(depDate, 3);
+  const ret = depPlus3 > route.returnDateRange.start ? depPlus3 : route.returnDateRange.start;
+  return ret <= route.returnDateRange.end ? ret : null;
+}
+
 export function transformOffer(offer: AmadeusRawOffer, origin: string, destination: string): FlightOffer | null {
   const itinerary = offer.itineraries[0];
   if (!itinerary || itinerary.segments.length === 0) return null;
@@ -133,47 +162,52 @@ export class AmadeusProvider implements FlightProvider {
       return [];
     }
 
-    try {
-      const effectivePassengers = route.passengers ?? passengers;
-      const params: Record<string, unknown> = {
-        originLocationCode: route.origin,
-        destinationLocationCode: route.destination,
-        departureDate: route.dateRange.start,
-        adults: effectivePassengers.adults,
-        children: effectivePassengers.children,
-        currencyCode: 'TWD',
-        max: 10,
-      };
-      if (route.returnDateRange) {
-        params['returnDate'] = route.returnDateRange.start;
+    const effectivePassengers = route.passengers ?? passengers;
+    const departureDates = generateDateRange(route.dateRange.start, route.dateRange.end);
+    const allOffers: FlightOffer[] = [];
+
+    for (const depDate of departureDates) {
+      try {
+        const params: Record<string, unknown> = {
+          originLocationCode: route.origin,
+          destinationLocationCode: route.destination,
+          departureDate: depDate,
+          adults: effectivePassengers.adults,
+          children: effectivePassengers.children,
+          currencyCode: 'TWD',
+          max: 3,
+        };
+
+        const returnDate = computeReturnDate(depDate, route);
+        if (route.returnDateRange && !returnDate) continue; // 回程日超出範圍，跳過
+        if (returnDate) params['returnDate'] = returnDate;
+        if (route.directFlightOnly) params['nonStop'] = 'true';
+
+        const response = await this.client.shopping.flightOffersSearch.get(params);
+        for (const raw of response.data) {
+          const offer = transformOffer(raw, route.origin, route.destination);
+          if (offer) allOffers.push(offer);
+        }
+      } catch (error) {
+        logger.error({
+          module: 'amadeus-provider',
+          action: 'search',
+          route: `${route.origin}-${route.destination}`,
+          date: depDate,
+          error: error instanceof Error ? error.message : String(error),
+          statusCode: (error as { response?: { statusCode?: number } })?.response?.statusCode,
+        });
       }
-      if (route.directFlightOnly) params['nonStop'] = 'true';
-
-      const response = await this.client.shopping.flightOffersSearch.get(params);
-
-      const offers: FlightOffer[] = [];
-      for (const raw of response.data) {
-        const offer = transformOffer(raw, route.origin, route.destination);
-        if (offer) offers.push(offer);
-      }
-
-      logger.info({
-        module: 'amadeus-provider',
-        action: 'search',
-        route: `${route.origin}-${route.destination}`,
-        found: offers.length,
-      });
-
-      return offers;
-    } catch (error) {
-      logger.error({
-        module: 'amadeus-provider',
-        action: 'search',
-        route: `${route.origin}-${route.destination}`,
-        error: error instanceof Error ? error.message : String(error),
-        statusCode: (error as { response?: { statusCode?: number } })?.response?.statusCode,
-      });
-      return [];
     }
+
+    logger.info({
+      module: 'amadeus-provider',
+      action: 'search',
+      route: `${route.origin}-${route.destination}`,
+      found: allOffers.length,
+      datesSearched: departureDates.length,
+    });
+
+    return allOffers;
   }
 }

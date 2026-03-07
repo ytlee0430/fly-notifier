@@ -23,6 +23,24 @@ vi.mock('node:module', async (importOriginal) => {
   };
 });
 
+describe('generateDateRange', () => {
+  it('單天範圍回傳一個日期', async () => {
+    const { generateDateRange } = await import('../../src/providers/amadeus.js');
+    expect(generateDateRange('2026-04-01', '2026-04-01')).toEqual(['2026-04-01']);
+  });
+
+  it('多天範圍回傳所有日期', async () => {
+    const { generateDateRange } = await import('../../src/providers/amadeus.js');
+    expect(generateDateRange('2026-04-01', '2026-04-03')).toEqual(['2026-04-01', '2026-04-02', '2026-04-03']);
+  });
+
+  it('跨月正確', async () => {
+    const { generateDateRange } = await import('../../src/providers/amadeus.js');
+    const result = generateDateRange('2026-03-30', '2026-04-02');
+    expect(result).toEqual(['2026-03-30', '2026-03-31', '2026-04-01', '2026-04-02']);
+  });
+});
+
 // --- Isolated transform tests (no SDK needed) ---
 describe('Story 2.2: Amadeus Provider - transformOffer', () => {
   // We test the exported transform function directly
@@ -170,7 +188,7 @@ describe('Story 2.2: Amadeus Provider - transformOffer', () => {
   });
 });
 
-describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
+describe('AmadeusProvider - search params', () => {
   it('directFlightOnly:true 時 API params 包含 nonStop:true', async () => {
     vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
     vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
@@ -178,14 +196,13 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
     const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
     const provider = new AmadeusProvider();
 
-    // Access the internal client mock
     const getMock = vi.fn().mockResolvedValue({ data: [] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
 
     const route = {
       origin: 'TPE', destination: 'NRT', enabled: true,
-      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
       directFlightOnly: true,
     };
     await provider.search(route, { adults: 2, children: 1 });
@@ -207,7 +224,7 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
 
     const route = {
       origin: 'TPE', destination: 'NRT', enabled: true,
-      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
     };
     await provider.search(route, { adults: 2, children: 1 });
 
@@ -229,12 +246,36 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
 
     const route = {
       origin: 'TPE', destination: 'NRT', enabled: true,
-      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
       returnDateRange: { start: '2026-04-05', end: '2026-04-10' },
     };
     await provider.search(route, { adults: 2, children: 1 });
 
+    // 無 returnWindowDays 時預設 departure +3 = 04-04，但 returnDateRange.start 是 04-05 取較晚者
     expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ returnDate: '2026-04-05' }));
+
+    vi.unstubAllEnvs();
+  });
+
+  it('有 returnWindowDays 時使用 departure + min 作為 returnDate', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
+      returnDateRange: { start: '2026-04-01', end: '2026-04-10' },
+      returnWindowDays: { min: 3, max: 5 },
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ returnDate: '2026-04-04' }));
 
     vi.unstubAllEnvs();
   });
@@ -251,7 +292,7 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
 
     const route = {
       origin: 'TPE', destination: 'NRT', enabled: true,
-      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
     };
     await provider.search(route, { adults: 2, children: 1 });
 
@@ -273,12 +314,36 @@ describe('AmadeusProvider - directFlightOnly & per-route passengers', () => {
 
     const route = {
       origin: 'TPE', destination: 'NRT', enabled: true,
-      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-06-30' },
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-01' },
       passengers: { adults: 1, children: 0 },
     };
     await provider.search(route, { adults: 2, children: 1 }); // global=2+1
 
     expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ adults: 1, children: 0 }));
+
+    vi.unstubAllEnvs();
+  });
+
+  it('dateRange 多天時遍歷每天呼叫 API', async () => {
+    vi.stubEnv('AMADEUS_CLIENT_ID', 'test-id');
+    vi.stubEnv('AMADEUS_CLIENT_SECRET', 'test-secret');
+
+    const { AmadeusProvider } = await import('../../src/providers/amadeus.js');
+    const provider = new AmadeusProvider();
+    const getMock = vi.fn().mockResolvedValue({ data: [] });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (provider as any).client = { shopping: { flightOffersSearch: { get: getMock } } };
+
+    const route = {
+      origin: 'TPE', destination: 'NRT', enabled: true,
+      priceThreshold: 25000, dateRange: { start: '2026-04-01', end: '2026-04-03' },
+    };
+    await provider.search(route, { adults: 2, children: 1 });
+
+    expect(getMock).toHaveBeenCalledTimes(3);
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ departureDate: '2026-04-01' }));
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ departureDate: '2026-04-02' }));
+    expect(getMock).toHaveBeenCalledWith(expect.objectContaining({ departureDate: '2026-04-03' }));
 
     vi.unstubAllEnvs();
   });
