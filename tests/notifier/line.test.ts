@@ -2,16 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { FlightOffer } from '../../src/providers/types.js';
 import { formatOffer, formatMorningReportItem, sendLowPriceAlert, sendMorningReport } from '../../src/notifier/line.js';
 
-let mockPushMessage: ReturnType<typeof vi.fn>;
+let mockMulticast: ReturnType<typeof vi.fn>;
 
 vi.mock('@line/bot-sdk', () => {
-  // Use a module-level variable to hold the pushMessage mock
   return {
     messagingApi: {
       MessagingApiClient: vi.fn(function () {
         return {
-          get pushMessage() {
-            return mockPushMessage;
+          get multicast() {
+            return mockMulticast;
           },
         };
       }),
@@ -75,7 +74,7 @@ describe('Story 3.1: LINE 通知模組 - sendLowPriceAlert', () => {
   beforeEach(() => {
     vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', 'test-token');
     vi.stubEnv('LINE_USER_ID', 'test-user');
-    mockPushMessage = vi.fn().mockResolvedValue({});
+    mockMulticast = vi.fn().mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -85,7 +84,7 @@ describe('Story 3.1: LINE 通知模組 - sendLowPriceAlert', () => {
   it('offers 為空時不發送，回傳 success:true sent:0', async () => {
     const result = await sendLowPriceAlert([]);
     expect(result).toEqual({ success: true, sent: 0 });
-    expect(mockPushMessage).not.toHaveBeenCalled();
+    expect(mockMulticast).not.toHaveBeenCalled();
   });
 
   it('成功發送時回傳 success:true 和 sent 數量', async () => {
@@ -93,14 +92,22 @@ describe('Story 3.1: LINE 通知模組 - sendLowPriceAlert', () => {
     const result = await sendLowPriceAlert(offers);
     expect(result.success).toBe(true);
     expect(result.sent).toBe(2);
-    expect(mockPushMessage).toHaveBeenCalledOnce();
+    expect(mockMulticast).toHaveBeenCalledOnce();
   });
 
   it('API 失敗時回傳 success:false，不 throw', async () => {
-    mockPushMessage = vi.fn().mockRejectedValue(new Error('LINE API error'));
+    mockMulticast = vi.fn().mockRejectedValue(new Error('LINE API error'));
     const result = await sendLowPriceAlert([makeOffer()]);
     expect(result.success).toBe(false);
     expect(result.sent).toBe(0);
+  });
+
+  it('多人 LINE_USER_ID 以逗號分隔發送給所有人', async () => {
+    vi.stubEnv('LINE_USER_ID', 'user-a, user-b, user-c');
+    const result = await sendLowPriceAlert([makeOffer()]);
+    expect(result.success).toBe(true);
+    const callArg = mockMulticast.mock.calls[0]![0] as { to: string[] };
+    expect(callArg.to).toEqual(['user-a', 'user-b', 'user-c']);
   });
 });
 
@@ -108,7 +115,7 @@ describe('Story 4.1: sendMorningReport', () => {
   beforeEach(() => {
     vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', 'test-token');
     vi.stubEnv('LINE_USER_ID', 'test-user');
-    mockPushMessage = vi.fn().mockResolvedValue({});
+    mockMulticast = vi.fn().mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -123,12 +130,12 @@ describe('Story 4.1: sendMorningReport', () => {
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
     expect(result.sent).toBe(1);
-    expect(mockPushMessage).toHaveBeenCalledOnce();
-    const callArg = mockPushMessage.mock.calls[0]![0] as {
-      to: string;
+    expect(mockMulticast).toHaveBeenCalledOnce();
+    const callArg = mockMulticast.mock.calls[0]![0] as {
+      to: string[];
       messages: Array<{ type: string; text: string }>;
     };
-    expect(callArg.to).toBe('test-user');
+    expect(callArg.to).toEqual(['test-user']);
     expect(callArg.messages[0]!.type).toBe('text');
     const text = callArg.messages[0]!.text;
     expect(text).toContain('早報');
@@ -143,12 +150,12 @@ describe('Story 4.1: sendMorningReport', () => {
     ];
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
-    const callArg = mockPushMessage.mock.calls[0]![0] as { messages: Array<{ text: string }> };
+    const callArg = mockMulticast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
     expect(callArg.messages[0]!.text).toContain('無資料');
   });
 
   it('LINE API 失敗時回傳 success:false，不 throw', async () => {
-    mockPushMessage = vi.fn().mockRejectedValue(new Error('LINE error'));
+    mockMulticast = vi.fn().mockRejectedValue(new Error('LINE error'));
     const result = await sendMorningReport([{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: makeOffer() }]);
     expect(result.success).toBe(false);
     expect(result.sent).toBe(0);
@@ -171,7 +178,7 @@ describe('Story 4.1: sendMorningReport', () => {
     const summary = [{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: roundTripOffer }];
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
-    const callArg = mockPushMessage.mock.calls[0]![0] as { messages: Array<{ text: string }> };
+    const callArg = mockMulticast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
     const text = callArg.messages[0]!.text;
     expect(text).toContain('來回');
     expect(text).toContain('去 07-25 09:00→13:30');

@@ -25,15 +25,19 @@ export interface NotifyResult {
   sent: number;
 }
 
+function parseUserIds(raw: string): string[] {
+  return raw.split(',').map((id) => id.trim()).filter(Boolean);
+}
+
 export async function sendLowPriceAlert(offers: FlightOffer[]): Promise<NotifyResult> {
   if (offers.length === 0) {
     return { success: true, sent: 0 };
   }
 
   const channelAccessToken = process.env['LINE_CHANNEL_ACCESS_TOKEN'] ?? '';
-  const userId = process.env['LINE_USER_ID'] ?? '';
+  const userIds = parseUserIds(process.env['LINE_USER_ID'] ?? '');
 
-  if (!channelAccessToken || !userId) {
+  if (!channelAccessToken || userIds.length === 0) {
     logger.warn({ module: 'line-notifier', action: 'sendLowPriceAlert', message: 'Missing LINE credentials — skipping' });
     return { success: false, sent: 0 };
   }
@@ -42,8 +46,8 @@ export async function sendLowPriceAlert(offers: FlightOffer[]): Promise<NotifyRe
   const message = formatMessage(offers);
 
   try {
-    await client.pushMessage({
-      to: userId,
+    await client.multicast({
+      to: userIds,
       messages: [{ type: 'text', text: message }],
     });
 
@@ -51,6 +55,7 @@ export async function sendLowPriceAlert(offers: FlightOffer[]): Promise<NotifyRe
       module: 'line-notifier',
       action: 'sendLowPriceAlert',
       sent: offers.length,
+      recipients: userIds.length,
     });
 
     return { success: true, sent: offers.length };
@@ -91,9 +96,9 @@ export async function sendMorningReport(
   summary: Array<{ route: string; lowestPrice: number | null; bestOffer: FlightOffer | null }>,
 ): Promise<NotifyResult> {
   const channelAccessToken = process.env['LINE_CHANNEL_ACCESS_TOKEN'] ?? '';
-  const userId = process.env['LINE_USER_ID'] ?? '';
+  const userIds = parseUserIds(process.env['LINE_USER_ID'] ?? '');
 
-  if (!channelAccessToken || !userId) {
+  if (!channelAccessToken || userIds.length === 0) {
     logger.warn({ module: 'line-notifier', action: 'sendMorningReport', message: 'Missing LINE credentials — skipping' });
     return { success: false, sent: 0 };
   }
@@ -109,12 +114,12 @@ export async function sendMorningReport(
   const message = reportLines.join(`\n${separator}\n`);
 
   try {
-    await client.pushMessage({
-      to: userId,
+    await client.multicast({
+      to: userIds,
       messages: [{ type: 'text', text: message }],
     });
 
-    logger.info({ module: 'line-notifier', action: 'sendMorningReport', routes: summary.length });
+    logger.info({ module: 'line-notifier', action: 'sendMorningReport', routes: summary.length, recipients: userIds.length });
     return { success: true, sent: 1 };
   } catch (error) {
     logger.error({
