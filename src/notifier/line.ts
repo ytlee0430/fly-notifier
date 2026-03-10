@@ -96,9 +96,8 @@ export async function sendMorningReport(
   summary: Array<{ route: string; lowestPrice: number | null; bestOffer: FlightOffer | null }>,
 ): Promise<NotifyResult> {
   const channelAccessToken = process.env['LINE_CHANNEL_ACCESS_TOKEN'] ?? '';
-  const userIds = parseUserIds(process.env['LINE_USER_ID'] ?? '');
 
-  if (!channelAccessToken || userIds.length === 0) {
+  if (!channelAccessToken) {
     logger.warn({ module: 'line-notifier', action: 'sendMorningReport', message: 'Missing LINE credentials — skipping' });
     return { success: false, sent: 0 };
   }
@@ -114,12 +113,11 @@ export async function sendMorningReport(
   const message = reportLines.join(`\n${separator}\n`);
 
   try {
-    await client.multicast({
-      to: userIds,
+    await client.broadcast({
       messages: [{ type: 'text', text: message }],
     });
 
-    logger.info({ module: 'line-notifier', action: 'sendMorningReport', routes: summary.length, recipients: userIds.length });
+    logger.info({ module: 'line-notifier', action: 'sendMorningReport', routes: summary.length, method: 'broadcast' });
     return { success: true, sent: 1 };
   } catch (error) {
     logger.error({

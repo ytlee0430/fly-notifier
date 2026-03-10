@@ -3,6 +3,7 @@ import type { FlightOffer } from '../../src/providers/types.js';
 import { formatOffer, formatMorningReportItem, sendLowPriceAlert, sendMorningReport } from '../../src/notifier/line.js';
 
 let mockMulticast: ReturnType<typeof vi.fn>;
+let mockBroadcast: ReturnType<typeof vi.fn>;
 
 vi.mock('@line/bot-sdk', () => {
   return {
@@ -11,6 +12,9 @@ vi.mock('@line/bot-sdk', () => {
         return {
           get multicast() {
             return mockMulticast;
+          },
+          get broadcast() {
+            return mockBroadcast;
           },
         };
       }),
@@ -114,15 +118,14 @@ describe('Story 3.1: LINE 通知模組 - sendLowPriceAlert', () => {
 describe('Story 4.1: sendMorningReport', () => {
   beforeEach(() => {
     vi.stubEnv('LINE_CHANNEL_ACCESS_TOKEN', 'test-token');
-    vi.stubEnv('LINE_USER_ID', 'test-user');
-    mockMulticast = vi.fn().mockResolvedValue({});
+    mockBroadcast = vi.fn().mockResolvedValue({});
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('彙整摘要包含各航線資訊並成功發送', async () => {
+  it('彙整摘要包含各航線資訊並成功發送（broadcast）', async () => {
     const summary = [
       { route: 'TPE-NRT', lowestPrice: 17491, bestOffer: makeOffer({ destination: 'NRT', totalPriceTWD: 17491, airline: 'CI', flightNumber: 'CI001', departureTime: '09:00', stops: 0 }) },
       { route: 'TPE-KIX', lowestPrice: 15071, bestOffer: makeOffer({ destination: 'KIX', totalPriceTWD: 15071, airline: 'IT', flightNumber: 'IT202', departureTime: '10:30', stops: 0 }) },
@@ -130,12 +133,10 @@ describe('Story 4.1: sendMorningReport', () => {
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
     expect(result.sent).toBe(1);
-    expect(mockMulticast).toHaveBeenCalledOnce();
-    const callArg = mockMulticast.mock.calls[0]![0] as {
-      to: string[];
+    expect(mockBroadcast).toHaveBeenCalledOnce();
+    const callArg = mockBroadcast.mock.calls[0]![0] as {
       messages: Array<{ type: string; text: string }>;
     };
-    expect(callArg.to).toEqual(['test-user']);
     expect(callArg.messages[0]!.type).toBe('text');
     const text = callArg.messages[0]!.text;
     expect(text).toContain('早報');
@@ -150,12 +151,12 @@ describe('Story 4.1: sendMorningReport', () => {
     ];
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
-    const callArg = mockMulticast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
+    const callArg = mockBroadcast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
     expect(callArg.messages[0]!.text).toContain('無資料');
   });
 
   it('LINE API 失敗時回傳 success:false，不 throw', async () => {
-    mockMulticast = vi.fn().mockRejectedValue(new Error('LINE error'));
+    mockBroadcast = vi.fn().mockRejectedValue(new Error('LINE error'));
     const result = await sendMorningReport([{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: makeOffer() }]);
     expect(result.success).toBe(false);
     expect(result.sent).toBe(0);
@@ -178,7 +179,7 @@ describe('Story 4.1: sendMorningReport', () => {
     const summary = [{ route: 'TPE-NRT', lowestPrice: 17491, bestOffer: roundTripOffer }];
     const result = await sendMorningReport(summary);
     expect(result.success).toBe(true);
-    const callArg = mockMulticast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
+    const callArg = mockBroadcast.mock.calls[0]![0] as { messages: Array<{ text: string }> };
     const text = callArg.messages[0]!.text;
     expect(text).toContain('來回');
     expect(text).toContain('去 07-25 09:00→13:30');

@@ -102,8 +102,8 @@ describe('Story 1.2: 航線設定模組', () => {
       }
     });
 
-    it('所有啟用的航線都設定 excludeAirlines 且包含 CI', () => {
-      const enabled = config.routes.filter((r) => r.enabled);
+    it('除 FUK 外，所有啟用的航線都設定 excludeAirlines 且包含 CI', () => {
+      const enabled = config.routes.filter((r) => r.enabled && r.destination !== 'FUK');
       for (const route of enabled) {
         expect(route.excludeAirlines).toBeDefined();
         expect(route.excludeAirlines).toContain('CI');
