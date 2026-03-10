@@ -58,7 +58,6 @@ export const config: AppConfig = {
       departureTimeRange: { earliest: '06:00', latest: '22:00' },
       arrivalTimeRange: { earliest: '06:00', latest: '23:59' },
       directFlightOnly: true,
-      excludeAirlines: ['CI'],
     },
     {
       origin: 'TPE',
