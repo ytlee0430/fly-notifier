@@ -143,7 +143,7 @@ export class AmadeusProvider implements FlightProvider {
       return;
     }
 
-    const hostname = process.env['AMADEUS_HOSTNAME'] ?? 'production';
+    const hostname = process.env['AMADEUS_HOSTNAME'] ?? 'test';
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
