@@ -143,9 +143,12 @@ export class AmadeusProvider implements FlightProvider {
       return;
     }
 
+    const hostname = process.env['AMADEUS_HOSTNAME'] ?? 'production';
+
     try {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      this.client = new AmadeusSDK({ clientId, clientSecret }) as AmadeusClient;
+      this.client = new AmadeusSDK({ clientId, clientSecret, hostname }) as AmadeusClient;
+      logger.info({ module: 'amadeus-provider', action: 'init', hostname });
     } catch (error) {
       logger.error({
         module: 'amadeus-provider',
@@ -183,19 +186,27 @@ export class AmadeusProvider implements FlightProvider {
         if (returnDate) params['returnDate'] = returnDate;
         if (route.directFlightOnly) params['nonStop'] = 'true';
 
+        logger.info({ module: 'amadeus-provider', action: 'apiCall', route: `${route.origin}-${route.destination}`, date: depDate, params });
+
         const response = await this.client.shopping.flightOffersSearch.get(params);
+        const resultCount = response.data?.length ?? 0;
+
+        logger.info({ module: 'amadeus-provider', action: 'apiResult', route: `${route.origin}-${route.destination}`, date: depDate, resultCount });
+
         for (const raw of response.data) {
           const offer = transformOffer(raw, route.origin, route.destination);
           if (offer) allOffers.push(offer);
         }
       } catch (error) {
+        const amadeusError = error as { response?: { statusCode?: number; result?: unknown } };
         logger.error({
           module: 'amadeus-provider',
           action: 'search',
           route: `${route.origin}-${route.destination}`,
           date: depDate,
           error: error instanceof Error ? error.message : String(error),
-          statusCode: (error as { response?: { statusCode?: number } })?.response?.statusCode,
+          statusCode: amadeusError?.response?.statusCode,
+          detail: amadeusError?.response?.result,
         });
       }
     }

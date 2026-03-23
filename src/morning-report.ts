@@ -3,6 +3,7 @@ import 'dotenv/config'; // Load .env for local development (no-op in CI)
 
 import { config } from './config.js';
 import { AmadeusProvider } from './providers/amadeus.js';
+import { TequilaProvider } from './providers/tequila.js';
 import { registerProvider, getProviders } from './providers/provider-registry.js';
 import { scanAllRoutes } from './scanner/scanner.js';
 import { sendMorningReport } from './notifier/line.js';
@@ -13,6 +14,7 @@ async function main(): Promise<void> {
   logger.info({ module: 'morning-report', action: 'start' });
 
   registerProvider(new AmadeusProvider());
+  registerProvider(new TequilaProvider());
   const providers = getProviders();
 
   const scanResults = await scanAllRoutes(config.routes, providers, config.passengers);
