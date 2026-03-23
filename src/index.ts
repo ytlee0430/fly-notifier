@@ -4,6 +4,7 @@ import 'dotenv/config'; // Load .env for local development (no-op in CI)
 import { config } from './config.js';
 import { AmadeusProvider } from './providers/amadeus.js';
 import { TequilaProvider } from './providers/tequila.js';
+import { SerpApiProvider } from './providers/serpapi.js';
 import { registerProvider, getProviders } from './providers/provider-registry.js';
 import { scanAllRoutes } from './scanner/scanner.js';
 import { filterNewOffers, markAllAsNotified } from './utils/dedup.js';
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
   // Register providers
   registerProvider(new AmadeusProvider());
   registerProvider(new TequilaProvider());
+  registerProvider(new SerpApiProvider());
   const providers = getProviders();
 
   // Scan all enabled routes
